@@ -1,9 +1,10 @@
--- Seems like at least part 1 should be a fancy oneliner in haskell
-
+import System.Environment (getArgs)
 import System.IO (withFile, IOMode(ReadMode), hGetContents)
 import Control.Monad
 import Data.List (sort, foldl')
 import qualified Data.Map.Strict as M
+import Control.DeepSeq (deepseq)
+import Control.Concurrent.Async (concurrently)
 
 absAndSubtractTuple :: Num a => (a, a) -> a
 absAndSubtractTuple = abs . uncurry (-)
@@ -21,8 +22,7 @@ toTupleOfLists = unzip . sublistsToTuples . map (map read) . map words . lines
         sublistsToTuples = map (\[x, y] -> (x, y)) 
 
 solvePart1 :: ([Int], [Int]) -> Int
-solvePart1 =  sum . map absAndSubtractTuple . toListOfTuples . sortEach
-
+solvePart1 = sum . map absAndSubtractTuple . toListOfTuples . sortEach
 
 insertIntoFreqMap :: [Int] -> M.Map Int Int -> Int -> M.Map Int Int
 insertIntoFreqMap vs m k =
@@ -38,10 +38,20 @@ solvePart2 (l1, l2) =
     let numbers = foldl' (insertIntoFreqMap l2) M.empty l1
     in foldl' (\acc (x, y) -> acc + (x * y)) 0 (M.toList numbers)
 
-main = do
-    withFile "input.txt" ReadMode $ \handle -> do
+readAndParseFile :: FilePath -> IO ([Int], [Int])
+readAndParseFile filePath = 
+    withFile filePath ReadMode $ \handle -> do
         contents <- hGetContents handle
-        let tuples = toTupleOfLists contents
-        print $ solvePart1 tuples
+        contents `deepseq` return (toTupleOfLists contents)
 
-        print $ solvePart2 tuples
+main :: IO ()
+main = do
+    args <- getArgs
+    case args of
+        [filePath] -> do
+            tuples <- readAndParseFile filePath
+            let part1Result = solvePart1 tuples
+            let part2Result = solvePart2 tuples
+            putStrLn $ "Part 1: " ++ show part1Result
+            putStrLn $ "Part 2: " ++ show part2Result
+        _ -> putStrLn "Usage: program <file-path>"
