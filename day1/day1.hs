@@ -4,7 +4,6 @@ import Control.Monad
 import Data.List (sort, foldl')
 import qualified Data.Map.Strict as M
 import Control.DeepSeq (deepseq)
-import Control.Concurrent.Async (concurrently)
 
 
 -- | Solves part 1 of the problem by summing the absolute differences of corresponding pairs
