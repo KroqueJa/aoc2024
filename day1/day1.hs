@@ -45,6 +45,8 @@ readAndParseFile :: FilePath -> IO ([Int], [Int])
 readAndParseFile filePath = 
     withFile filePath ReadMode $ \handle -> do
         contents <- hGetContents handle
+        -- `deepseq` forces an evaluation of all contents so that the file handle does not
+        -- close before the contents have been read into memory.
         contents `deepseq` return (toTupleOfLists contents)
     where
         -- | Parses a string representation of pairs of integers into a tuple of two lists.
