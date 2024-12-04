@@ -1,10 +1,10 @@
 /*
-   I hate bounds checking infinitely. Therefore I have devised a plan to solve this problem without them.
-   We shall create four matrices with `true` values for 'X', 'M', 'A' and 'S' respectively. Then shift them
-   around and see where they overlap. This way there is no bounds checking.
+I hate bounds checking infinitely. Therefore I have devised a plan to solve this problem without them.
+We shall create four matrices with `true` values for 'X', 'M', 'A' and 'S' respectively. Then shift them
+around and see where they overlap. This way there is no bounds checking.
 
-   This could be SIMD:d but that would be even more bounds checking. Bleh.
-   */
+This could be SIMD:d but that would be even more bounds checking. Bleh.
+*/
 
 #include <iostream>
 #include <fstream>
@@ -234,12 +234,39 @@ int main(int argc, char** argv) {
     for (const auto matrix: matrices) {
         for (const auto& row: *matrix) {
             for (const bool value: row) {
-                if (value) ++ sum;
+                if (value) ++sum;
             }
         }
     }
 
     std::cout << sum << std::endl;
+
+    // -------- Part 2 --------
+    // With this strategy, part 2 is trivial! Luck is good.
+
+    size_t sum2 = 0;
+
+    ShiftyMatrix<bool> SE = as.where(ms.shiftRight(1).shiftDown(1)).where(ss.shiftLeft(1).shiftUp(1));
+    ShiftyMatrix<bool> SW = as.where(ms.shiftLeft(1).shiftDown(1)).where(ss.shiftRight(1).shiftUp(1));
+    ShiftyMatrix<bool> NW = as.where(ms.shiftLeft(1).shiftUp(1)).where(ss.shiftRight(1).shiftDown(1));
+    ShiftyMatrix<bool> NE = as.where(ms.shiftRight(1).shiftUp(1)).where(ss.shiftLeft(1).shiftDown(1));
+
+    ShiftyMatrix<bool> crossesSESW = SE.where(SW);
+    ShiftyMatrix<bool> crossesSENE = SE.where(NE);
+    ShiftyMatrix<bool> crossesNWSW = NW.where(SW);
+    ShiftyMatrix<bool> crossesNWNE = NW.where(NE);
+
+    std::vector<ShiftyMatrix<bool>*> matrices2 = {&crossesSESW, &crossesSENE, &crossesNWSW, &crossesNWNE};
+
+    for (const auto matrix: matrices2) {
+        for (const auto& row: *matrix) {
+            for (const bool value: row) {
+                if (value) ++sum2;
+            }
+        }
+    }
+
+    std::cout << sum2 << std::endl;
     return 0;
 }
 
