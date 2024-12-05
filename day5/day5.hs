@@ -78,6 +78,7 @@ solvePart1 rules updates = sum $ map middle $ filter (checkUpdate rules) updates
 
 
 -- | For part two, we extract the incorrect updates and attempt to correct them using the rules.
+solvePart2 :: Rulebook -> [Update] -> Int
 solvePart2 rules updates = sum $ map middle $ map (ruleBasedSort rules []) $ filter (\update -> not (checkUpdate rules update)) updates
     where
         -- | Orders numbers into "checked" and "not yet checked" lists. If a number is subject to a rule
