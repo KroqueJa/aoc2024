@@ -5,6 +5,7 @@
 
 // Incrementing mod 4 turns right
 enum Direction {
+    NONE = -1,
     NORTH = 0,
     EAST = 1,
     SOUTH = 2,
@@ -16,6 +17,7 @@ typedef struct GridNode {
     uint16_t col;
     bool blocker;
     bool visited;
+    enum Direction visited_dir;
     struct GridNode* neighbors[4];
 } GridNode;
 
@@ -54,6 +56,7 @@ GridNode* init_grid(uint16_t rows, uint16_t cols, char* charGrid) {
                 node->blocker = false;
             }
             node->visited = false;
+            node->visited_dir = NONE;
 
             // Set neighbors
             node->neighbors[NORTH] = (r > 0) ? &grid[(r - 1) * cols + c] : NULL;
@@ -68,26 +71,37 @@ GridNode* init_grid(uint16_t rows, uint16_t cols, char* charGrid) {
 
 void step(Guard* guard)
 {
-    // Wherever the guard is, the node is now visited
-    // (This gives us some redundant bool writes)
     if (guard->node == NULL) {
         return; // Stop if the guard is on a NULL node
     }
+
+    if (guard->node->visited_dir == guard->direction) {
+        return; // Loop detected, stop the guard
+    }
+    
+    guard->node->visited_dir = guard->direction;
     guard->node->visited = true;
 
     GridNode* next = guard->node->neighbors[guard->direction];
 
-
-    if (next != NULL && next->blocker) {
+    while (next != NULL && next->blocker) {
         // Turn the guard
         guard->direction = (guard->direction + 1) % 4;
-        return;
+        next = guard->node->neighbors[guard->direction];
     }
 
-    // Otherwise, take one step
+    // Move to the next node
     guard->node = next;
-    if (guard->node != NULL && !guard->node->visited) ++(guard->nodes_visited);  // Don't count steps over already visited nodes
+    if (guard->node != NULL && !guard->node->visited) ++(guard->nodes_visited);
+}
 
+void clear_visited(GridNode* grid, uint16_t rows, uint16_t cols) {
+    for (uint16_t r = 0; r < rows; ++r) {
+        for (uint16_t c = 0; c < cols; ++c) {
+            GridNode* node = &grid[r * cols + c];
+            node->visited_dir = NONE;
+        }
+    }
 }
 
 GridNode* find(GridNode* cursor, uint16_t row, uint16_t col)
@@ -96,6 +110,48 @@ GridNode* find(GridNode* cursor, uint16_t row, uint16_t col)
     while (cursor->col != col) cursor = cursor->neighbors[EAST];
 
     return cursor;
+}
+
+size_t solve_part_1(GridNode* grid, Guard* guard)
+{
+    while (guard->node != NULL) step(guard);
+    return guard->nodes_visited;
+}
+
+size_t solve_part_2(GridNode* grid, GridNode* start, Guard* guard, uint16_t rows, uint16_t cols)
+{
+    // If I'd been "truer" with the grid (actually not representing paths into blockers) there would probably have been a fancy node-removal algo to use for this.
+    // Optimization 2, courtesy of @pnosov: detect loop by checking whether we visit a visited node from the same direction
+
+    size_t result = 0;
+    for (size_t r = 0; r < rows; ++r) {
+        for (size_t c = 0; c < cols; ++c) {
+            *guard = init_guard(start, NORTH);
+
+            // Place an obstacle
+            GridNode* obstacle_node = find(grid, r, c);
+
+            // Skip if the obstacle node is already a blocker, the start node, or outside the guard's original path
+            if (obstacle_node->blocker || obstacle_node == start || !obstacle_node->visited) continue;
+
+            obstacle_node->blocker = true;
+
+            // Clear the grid's visited_II markers
+            clear_visited(grid, rows, cols);
+
+            while (guard->node != NULL) {
+                if (guard->node->visited_dir == guard->direction) {
+                    ++result;
+                    break;
+                }
+                step(guard);
+            }
+
+            // Remove the obstacle
+            obstacle_node->blocker = false;
+        }
+    }
+    return result;
 }
 
 int main(int argc, char** argv)
@@ -154,58 +210,13 @@ int main(int argc, char** argv)
     GridNode* start = find(grid, guard_row, guard_col);
     Guard guard = init_guard(start, NORTH);
 
-    // ======== PART 1 ========
+    size_t result1 = solve_part_1(grid, &guard);
 
-    // Just start walking and turning!
-    while (guard.node != NULL) {
-        step(&guard);
-    }
+    printf("%lu\n", result1);
 
-    printf("%lu\n", guard.nodes_visited);
+    size_t result2 = solve_part_2(grid, start, &guard, num_lines, line_width - 1);
 
-    // ======== PART 2 ========
-    // If I'd been "truer" with the grid (actually not representing paths into blockers) there would probably have been a fancy node-removal algo to use for this
-    // Now instead we do loop detection, by introducing a second guard who takes two steps every time the first guard takes one. If they ever face the same direction
-    // on the same node, there's a loop.
-    // Or, we just take an enormous amount of steps and if we're not done then there's a loop.
-
-    Guard guard2 = init_guard(start, NORTH);
-
-    size_t result = 0;
-    size_t steps_taken = 0;
-    for (size_t r = 0; r < num_lines; ++r) {
-        for (size_t c = 0; c < line_width - 1; ++c) {
-
-            // Place an obstacle
-            GridNode* obstacle_node = find(grid, r, c);
-
-            // Skip if the obstacle node is already a blocker or it's the start node
-            if (obstacle_node->blocker || obstacle_node == start) continue;
-
-            obstacle_node->blocker = true;
-
-            // Reset the guard
-            guard = init_guard(start, NORTH);
-            steps_taken = 0;
-
-            // Take a gazillion steps (or 5400, which seems to be enough)
-            while (guard.node != NULL && steps_taken < 5400) {
-                step(&guard);
-                ++steps_taken;
-            }
-
-            // If we're still on the grid after many steps, there's a loop
-            if (guard.node != NULL) {
-                ++result;
-            }
-
-            // Remove the obstacle
-            obstacle_node->blocker = false;
-        }
-    }
-
-
-    printf("%lu\n", result);
+    printf("%lu\n", result2);
 
     // Free the grid
     free(grid);
