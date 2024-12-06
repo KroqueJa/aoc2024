@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <pthread.h>
+#include <stdatomic.h>
 
 // Incrementing mod 4 turns right
 enum Direction {
@@ -27,6 +29,16 @@ typedef struct Guard {
     size_t nodes_visited;
 } Guard;
 
+typedef struct {
+    GridNode* grid;
+    GridNode* start;
+    uint16_t rows;
+    uint16_t cols;
+    atomic_size_t* result;
+    size_t start_row;
+    size_t end_row;
+} ThreadData;
+
 Guard init_guard(GridNode* node, enum Direction direction)
 {
     Guard guard;
@@ -36,6 +48,8 @@ Guard init_guard(GridNode* node, enum Direction direction)
 
     return guard;
 }
+
+
 
 GridNode* init_grid(uint16_t rows, uint16_t cols, char* charGrid) {
     GridNode* grid = calloc(rows * cols, sizeof(GridNode));
@@ -118,39 +132,73 @@ size_t solve_part_1(GridNode* grid, Guard* guard)
     return guard->nodes_visited;
 }
 
-size_t solve_part_2(GridNode* grid, GridNode* start, Guard* guard, uint16_t rows, uint16_t cols)
-{
-    // If I'd been "truer" with the grid (actually not representing paths into blockers) there would probably have been a fancy node-removal algo to use for this.
-    // Optimization 2, courtesy of @pnosov: detect loop by checking whether we visit a visited node from the same direction
 
-    size_t result = 0;
-    for (size_t r = 0; r < rows; ++r) {
-        for (size_t c = 0; c < cols; ++c) {
-            *guard = init_guard(start, NORTH);
+void* solve_part_2_worker(void* arg) {
+    ThreadData* data = (ThreadData*)arg;
+
+    for (size_t r = data->start_row; r < data->end_row; ++r) {
+        for (size_t c = 0; c < data->cols; ++c) {
+            Guard guard = init_guard(data->start, NORTH);
 
             // Place an obstacle
-            GridNode* obstacle_node = find(grid, r, c);
+            GridNode* obstacle_node = find(data->grid, r, c);
 
             // Skip if the obstacle node is already a blocker, the start node, or outside the guard's original path
-            if (obstacle_node->blocker || obstacle_node == start || !obstacle_node->visited) continue;
+            if (obstacle_node->blocker || obstacle_node == data->start || !obstacle_node->visited) continue;
 
             obstacle_node->blocker = true;
 
-            // Clear the grid's visited_II markers
-            clear_visited(grid, rows, cols);
+            // Clear the grid's visited_dir markers
+            clear_visited(data->grid, data->rows, data->cols);
 
-            while (guard->node != NULL) {
-                if (guard->node->visited_dir == guard->direction) {
-                    ++result;
+            bool loop_detected = false;
+            while (guard.node != NULL) {
+                if (guard.node->visited_dir == guard.direction) {
+                    loop_detected = true;
                     break;
                 }
-                step(guard);
+                step(&guard);
+            }
+
+            if (loop_detected) {
+                atomic_fetch_add(data->result, 1);
             }
 
             // Remove the obstacle
             obstacle_node->blocker = false;
         }
     }
+
+    return NULL;
+}
+
+
+size_t solve_part_2_parallel(GridNode* grid, GridNode* start, uint16_t rows, uint16_t cols, int num_threads) {
+    pthread_t threads[num_threads];
+    ThreadData thread_data[num_threads];
+    atomic_size_t result = 0;
+
+    size_t rows_per_thread = rows / num_threads;
+    size_t remaining_rows = rows % num_threads;
+
+    size_t current_row = 0;
+    for (int i = 0; i < num_threads; ++i) {
+        thread_data[i].grid = grid;
+        thread_data[i].start = start;
+        thread_data[i].rows = rows;
+        thread_data[i].cols = cols;
+        thread_data[i].result = &result;
+        thread_data[i].start_row = current_row;
+        thread_data[i].end_row = current_row + rows_per_thread + (i < remaining_rows ? 1 : 0);
+
+        pthread_create(&threads[i], NULL, solve_part_2_worker, &thread_data[i]);
+        current_row = thread_data[i].end_row;
+    }
+
+    for (int i = 0; i < num_threads; ++i) {
+        pthread_join(threads[i], NULL);
+    }
+
     return result;
 }
 
@@ -171,28 +219,23 @@ int main(int argc, char** argv)
     fseek(f, 0L, SEEK_END);
     size_t f_sz = ftell(f);
 
-    char buf[f_sz+1];
-    // Rewind file
+    char buf[f_sz + 1];
     fseek(f, 0L, SEEK_SET);
 
     fread(buf, 1, f_sz, f);
-
     fclose(f);
 
-    // Set up char buffer
     size_t line_width = 0;
     while (buf[line_width++] != '\n');
 
     size_t num_lines = f_sz / line_width;
 
     char* charGrid = malloc(line_width * num_lines * sizeof(char));
-
     uint16_t guard_row, guard_col;
+
     for (size_t r = 0; r < num_lines; ++r) {
-        for (size_t c = 0; c < line_width-1; ++c) {
+        for (size_t c = 0; c < line_width - 1; ++c) {
             charGrid[line_width * r + c] = buf[line_width * r + c];
-            // Save the guard's position for later
-            // (For completeness we should probably search for '<', '>' and 'v' too but meh
             if (charGrid[line_width * r + c] == '^') {
                 guard_row = r;
                 guard_col = c;
@@ -200,24 +243,19 @@ int main(int argc, char** argv)
         }
     }
 
-    // Initialize grid
     GridNode* grid = init_grid(num_lines, line_width - 1, charGrid);
-
-    // Free the charGrid, we no longer need it
     free(charGrid);
 
-    // Place guard on grid
     GridNode* start = find(grid, guard_row, guard_col);
     Guard guard = init_guard(start, NORTH);
 
     size_t result1 = solve_part_1(grid, &guard);
-
     printf("%lu\n", result1);
 
-    size_t result2 = solve_part_2(grid, start, &guard, num_lines, line_width - 1);
-
+    int num_threads = 4; // Adjust based on your system
+    size_t result2 = solve_part_2_parallel(grid, start, num_lines, line_width - 1, num_threads);
     printf("%lu\n", result2);
 
-    // Free the grid
     free(grid);
+    return 0;
 }
