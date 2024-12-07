@@ -92,7 +92,9 @@ void step(Guard* guard)
     if (guard->node->visited_dir == guard->direction) {
         return; // Loop detected, stop the guard
     }
-    
+
+    // Somewhat sneakily, we track the direction (implying visitedness) for part 2 but only the visitedness for part 1.
+    // That is because we use the "visited in part 1" field for part 2, and only reset the `visited_dir` in that part.
     guard->node->visited_dir = guard->direction;
     guard->node->visited = true;
 
