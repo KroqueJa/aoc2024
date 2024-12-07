@@ -48,7 +48,7 @@ main = do
             print $ solution2
         _ -> print $ "Usage: day2 <input>"
 
--- | Reads and parses the input file into
+-- | Reads and parses the input file into a list of Equation
 readAndParseFile :: FilePath -> IO [Equation]
 readAndParseFile filePath = 
     withFile filePath ReadMode $ \handle -> do
