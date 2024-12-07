@@ -252,7 +252,7 @@ int main(int argc, char** argv)
     size_t result1 = solve_part_1(grid, &guard);
     printf("%lu\n", result1);
 
-    int num_threads = 4; // Adjust based on your system
+    int num_threads = 4;
     size_t result2 = solve_part_2_parallel(grid, start, num_lines, line_width - 1, num_threads);
     printf("%lu\n", result2);
 
