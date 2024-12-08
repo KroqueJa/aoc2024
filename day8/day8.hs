@@ -46,21 +46,22 @@ solvePart1 = solve antennaPairToAntinodesPart1
                 S.fromList [antinode1, antinode2]
 
 solvePart2 :: Grid -> Int
-solvePart2 = solve antennaPairToAntinodesPart2
+solvePart2 grid@(Grid h w as) = solve (antennaPairToAntinodesPart2 h w) grid
     where
         -- | Creates antinodes for an antenna pair according to part 2
-        -- Just takes 50 steps forward and backward, knowing that they will be filtered later
-        antennaPairToAntinodesPart2 :: Position -> Position -> S.Set Position
-        antennaPairToAntinodesPart2 p1@(r1, c1) p2@(r2, c2) =
+        -- Just takes a large number of steps forward and backward, knowing that they will be filtered later
+        antennaPairToAntinodesPart2 :: Int -> Int -> Position -> Position -> S.Set Position
+        antennaPairToAntinodesPart2 h w p1@(r1, c1) p2@(r2, c2) =
             let
+                largestDim = max h w
                 dr = r2 - r1
                 dc = c2 - c1
 
                 -- "Fifty in the forward direction from p1"
-                forwardAntinodes = [(r1 + k * dr, c1 + k * dc) | k <- [1..50]]
+                forwardAntinodes = [(r1 + k * dr, c1 + k * dc) | k <- [1..largestDim]]
 
                 -- "Fifty in the backward direction from p2"
-                backwardAntinodes = [(r2 - k * dr, c2 - k * dc) | k <- [1..50]]
+                backwardAntinodes = [(r2 - k * dr, c2 - k * dc) | k <- [1..largestDim]]
             in
                 S.fromList $ forwardAntinodes ++ backwardAntinodes
 
