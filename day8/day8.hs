@@ -53,15 +53,20 @@ solvePart2 grid@(Grid h w as) = solve (antennaPairToAntinodesPart2 h w) grid
         antennaPairToAntinodesPart2 :: Int -> Int -> Position -> Position -> S.Set Position
         antennaPairToAntinodesPart2 h w p1@(r1, c1) p2@(r2, c2) =
             let
-                largestDim = max h w
                 dr = r2 - r1
                 dc = c2 - c1
 
-                -- "Fifty in the forward direction from p1"
-                forwardAntinodes = [(r1 + k * dr, c1 + k * dc) | k <- [1..largestDim]]
+                -- Calculate the largest possible steps in each direction without going out of bounds
+                largestDistanceToEdge = minimum
+                    [ if dr > 0 then (h - r1 - 1) `div` dr else if dr < 0 then r1 `div` abs dr else maxBound
+                    , if dc > 0 then (w - c1 - 1) `div` dc else if dc < 0 then c1 `div` abs dc else maxBound
+                    ]
 
-                -- "Fifty in the backward direction from p2"
-                backwardAntinodes = [(r2 - k * dr, c2 - k * dc) | k <- [1..largestDim]]
+                -- Generate all antinodes based on the calculated largest distance
+                forwardAntinodes = [(r1 + k * dr, c1 + k * dc) | k <- [1..largestDistanceToEdge]]
+
+                -- Generate all antinodes in the backward direction
+                backwardAntinodes = [(r2 - k * dr, c2 - k * dc) | k <- [1..largestDistanceToEdge]]
             in
                 S.fromList $ forwardAntinodes ++ backwardAntinodes
 
