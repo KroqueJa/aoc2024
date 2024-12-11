@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#define MAX_NUM_PATHS 4096
+#define MAX_NUM_PATHS 8192
 
 typedef struct TrailScore {
     uint64_t score;
@@ -16,6 +16,7 @@ typedef struct MapInfo {
 } MapInfo;
 
 
+// These hash shenanigans are incredibly unsafe - the code crashes randomly if MAX_NUM_PATHS is too low :D
 void insert_path(bool* paths, int path) {
     int index = (path + 1) % MAX_NUM_PATHS; // Hash function
     int start_index = index;
