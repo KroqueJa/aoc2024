@@ -50,14 +50,9 @@ bool find_path(bool* paths, int path) {
     return false;
 }
 
-void score_trail(TrailScore* score, const MapInfo* mapInfo, bool* paths, int current_path, bool** visited, bool has_passed_visited, const size_t row, const size_t col, const int from_height) {
+void score_trail(TrailScore* score, const MapInfo* map_info, bool* paths, int current_path, bool** visited, bool has_passed_visited, const size_t row, const size_t col) {
 
-    // If we are out of bounds or already visited, we are done with this branch
-    if (row < 0 || row >= mapInfo->height || col < 0 || col >= mapInfo->width) return;
-
-    // Likewise, if this was an invalid step, we don't score this step
-    const int here_height = mapInfo->map[row][col];
-    if (here_height - from_height != 1) return;
+    const int here_height = map_info->map[row][col];
 
     // If we've been here before, we've been here before
     has_passed_visited = visited[row][col];
@@ -78,10 +73,17 @@ void score_trail(TrailScore* score, const MapInfo* mapInfo, bool* paths, int cur
     }
 
     // Recurse in all cardinal directions and accumulate the score
-    score_trail(score, mapInfo, paths, current_path, visited, has_passed_visited, row-1, col, here_height);
-    score_trail(score, mapInfo, paths, current_path, visited, has_passed_visited, row+1, col, here_height);
-    score_trail(score, mapInfo, paths, current_path, visited, has_passed_visited, row, col-1, here_height);
-    score_trail(score, mapInfo, paths, current_path, visited, has_passed_visited, row, col+1, here_height);
+    if (row > 0 && map_info->map[row-1][col] - here_height == 1)
+        score_trail(score, map_info, paths, current_path, visited, has_passed_visited, row-1, col);
+
+    if (row < map_info->height-1 && map_info->map[row+1][col] - here_height == 1)
+        score_trail(score, map_info, paths, current_path, visited, has_passed_visited, row+1, col);
+
+    if (col > 0 && map_info->map[row][col-1] - here_height == 1)
+        score_trail(score, map_info, paths, current_path, visited, has_passed_visited, row, col-1);
+
+    if (col < map_info->width-1 && map_info->map[row][col+1] - here_height == 1)
+        score_trail(score, map_info, paths, current_path, visited, has_passed_visited, row, col+1);
 }
 
 void clear_paths(bool* paths)
@@ -143,7 +145,7 @@ int main(int argc, char** argv)
         }
     }
 
-    MapInfo mapInfo = {map, height, width};
+    MapInfo map_info = {map, height, width};
     bool* paths = (bool*)calloc(MAX_NUM_PATHS, sizeof(bool));
 
     TrailScore score = {0, 0};
@@ -152,7 +154,7 @@ int main(int argc, char** argv)
             if (map[r][c] == 0) {
                 clear_paths(paths);
                 clear_visited(visited, height, width);
-                score_trail(&score, &mapInfo, paths, 0, visited, false, r, c, -1);  // Start at height -1 so the recursion doesn't fail
+                score_trail(&score, &map_info, paths, 0, visited, false, r, c);  // Start at height -1 so the recursion doesn't fail
             }
         }
     }
