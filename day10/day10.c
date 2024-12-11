@@ -60,7 +60,7 @@ void score_trail(TrailScore* score, const MapInfo* map_info, bool* paths, int cu
     // Mark the tile as visited
     visited[row][col] = true;
 
-    current_path = ((current_path << 5) | (current_path >> 27)) ^ (row * 31 + col);
+    current_path = (((current_path << 5) | (current_path >> 27)) ^ (row * 31 + col)) % MAX_NUM_PATHS;
 
     // If we are on a 9, increase the score
     if (here_height == 9) {
