@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <future>
 
 constexpr uint64_t CALCULATED_GENS = 75;
 
@@ -45,8 +46,11 @@ inline uint16_t numDigits(uint64_t number) {
     return digits;
 }
 
-std::vector<uint64_t> updateStone(const uint64_t number) {
-    if (number == 0) return {1};
+std::pair<uint64_t, uint64_t> updateStone(const uint64_t number, bool& isSingle) {
+    if (number == 0) {
+        isSingle = true; // Only one result
+        return {1, 0};
+    }
 
     uint64_t digits = numDigits(number);
     if (digits % 2 == 0) {
@@ -54,35 +58,55 @@ std::vector<uint64_t> updateStone(const uint64_t number) {
         for (uint16_t i = 0; i < digits / 2; ++i) denom *= 10;
         uint64_t left = number / denom;
         uint64_t right = number % denom;
+        isSingle = false; // Two results
         return {left, right};
     }
 
-    return {2024 * number};
+    isSingle = true; // Only one result
+    return {2024 * number, 0};
 }
 
-uint64_t search(std::unordered_map<MemoKey, uint64_t>& precalc, uint64_t target, uint64_t number) {
+uint64_t search(std::unordered_map<MemoKey, uint64_t>& precalc, uint64_t target, uint64_t number, int depth = 0) {
     if (target == 0) {
-        // We are done!
-        return 1;
+        return 1; // Base case
     }
 
-    // Check if we can fast-forward
+    // Fast-forward for single-digit numbers
     if (number < 10) {
         MemoKey key(number, target);
         auto resultIt = precalc.find(key);
         if (resultIt != precalc.end()) {
-            // Precalculated result found
             return resultIt->second;
         }
-
-
     }
-    std::vector<uint64_t> stones = updateStone(number);
-    uint64_t result = 0;
-    for (auto stone : stones) {
-        result += search(precalc, target - 1, stone);
+
+    bool isSingle;
+    auto stones = updateStone(number, isSingle);
+
+    if (isSingle) {
+        // Single stone: run search synchronously
+        return search(precalc, target - 1, stones.first, depth);
+    } else if (depth < 2) {
+        // Two stones: run each branch asynchronously
+        auto future1 = std::async(std::launch::async, [&] {
+            return search(precalc, target - 1, stones.first, depth + 1);
+        });
+        auto future2 = std::async(std::launch::async, [&] {
+            return search(precalc, target - 1, stones.second, depth + 1);
+        });
+
+        // Wait for both results and combine them
+        uint64_t result1 = future1.get();
+        uint64_t result2 = future2.get();
+
+        return result1 + result2;
+    } else {
+        // Deeper levels: run synchronously
+        uint64_t result1 = search(precalc, target - 1, stones.first, depth + 1);
+        uint64_t result2 = search(precalc, target - 1, stones.second, depth + 1);
+
+        return result1 + result2;
     }
-    return result;
 }
 
 void inspect(
@@ -96,17 +120,23 @@ void inspect(
         return;
     }
 
-    // Check if already precalcized
+    // Check if already precalculated
     if (precalc.find(key) != precalc.end()) {
         return;
     }
 
-    std::vector<uint64_t> stones = updateStone(number);
-    uint64_t result = 0;
+    bool isSingle;
+    auto stones = updateStone(number, isSingle);
 
-    for (auto stone : stones) {
-        inspect(precalc, stone, generations - 1);
-        result += precalc[MemoKey(stone, generations - 1)];
+    uint64_t result = 0;
+    if (isSingle) {
+        inspect(precalc, stones.first, generations - 1);
+        result += precalc[MemoKey(stones.first, generations - 1)];
+    } else {
+        inspect(precalc, stones.first, generations - 1);
+        inspect(precalc, stones.second, generations - 1);
+        result += precalc[MemoKey(stones.first, generations - 1)];
+        result += precalc[MemoKey(stones.second, generations - 1)];
     }
 
     precalc[key] = result;
@@ -139,16 +169,24 @@ int main(int argc, char** argv) {
     std::unordered_map<MemoKey, uint64_t> precalc;
     uint64_t target = 75;
 
+    std::vector<std::future<uint64_t>> futures;
     // Precalculate results for single-digit numbers
     for (uint64_t i = 0; i < 400000; ++i) {
         inspect(precalc, i, CALCULATED_GENS);
     }
 
-    uint64_t sum = 0;
     for (uint64_t number : numbers) {
-        sum += search(precalc, target, number);
+        futures.emplace_back(std::async(std::launch::async, [&precalc, target, number]() {
+            return search(precalc, target, number);
+        }));
     }
-    std::cout << sum << std::endl;
 
+    // Gather results
+    uint64_t sum = 0;
+    for (auto& future : futures) {
+        sum += future.get();
+    }
+
+    std::cout << sum << std::endl;
     return 0;
 }
