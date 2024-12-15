@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <future>
 
+static const std::array<uint64_t, 20> powersOf10 = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000,10000000000, 100000000000, 1000000000000, 10000000000000, 100000000000000};
 
 struct MemoKey {
     uint64_t number;
@@ -36,34 +37,6 @@ struct hash<MemoKey> {
 };
 }  // namespace std
 
-inline uint16_t numDigits(uint64_t number) {
-    uint16_t digits = 0;
-    while (number) {
-        number /= 10;
-        ++digits;
-    }
-    return digits;
-}
-
-std::pair<uint64_t, uint64_t> updateStone(const uint64_t number, bool& isSingle) {
-    if (number == 0) {
-        isSingle = true;  // Only one result
-        return {1, 0};
-    }
-
-    uint64_t digits = numDigits(number);
-    if (digits % 2 == 0) {
-        uint64_t denom = 1;
-        for (uint16_t i = 0; i < digits / 2; ++i) denom *= 10;
-        uint64_t left = number / denom;
-        uint64_t right = number % denom;
-        isSingle = false;  // Two results
-        return {left, right};
-    }
-
-    isSingle = true;  // Only one result
-    return {2024 * number, 0};
-}
 
 
 uint64_t inspect(
@@ -90,12 +63,11 @@ uint64_t inspect(
         result = inspect(precalc, number, generations - 1);
     } else {
         // Calculate the number of digits
-        uint16_t numDigits = log10(number) + 1;
+        uint64_t numDigits = log10(number) + 1;
 
         if (numDigits % 2 == 0) {
             // Split number into left and right parts
-            uint64_t denom = 1;
-            for (uint16_t i = 0; i < numDigits / 2; ++i) denom *= 10;
+            uint64_t denom = powersOf10[numDigits / 2];
 
             uint64_t left = number / denom;
             uint64_t right = number % denom;
