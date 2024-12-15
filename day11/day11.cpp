@@ -5,7 +5,6 @@
 #include <unordered_map>
 #include <future>
 
-constexpr uint64_t CALCULATED_GENS = 75;
 
 struct MemoKey {
     uint64_t number;
@@ -48,7 +47,7 @@ inline uint16_t numDigits(uint64_t number) {
 
 std::pair<uint64_t, uint64_t> updateStone(const uint64_t number, bool& isSingle) {
     if (number == 0) {
-        isSingle = true; // Only one result
+        isSingle = true;  // Only one result
         return {1, 0};
     }
 
@@ -58,88 +57,62 @@ std::pair<uint64_t, uint64_t> updateStone(const uint64_t number, bool& isSingle)
         for (uint16_t i = 0; i < digits / 2; ++i) denom *= 10;
         uint64_t left = number / denom;
         uint64_t right = number % denom;
-        isSingle = false; // Two results
+        isSingle = false;  // Two results
         return {left, right};
     }
 
-    isSingle = true; // Only one result
+    isSingle = true;  // Only one result
     return {2024 * number, 0};
 }
 
-uint64_t search(std::unordered_map<MemoKey, uint64_t>& precalc, uint64_t target, uint64_t number, int depth = 0) {
-    if (target == 0) {
-        return 1; // Base case
-    }
 
-    // Fast-forward for single-digit numbers
-    if (number < 10) {
-        MemoKey key(number, target);
-        auto resultIt = precalc.find(key);
-        if (resultIt != precalc.end()) {
-            return resultIt->second;
-        }
-    }
-
-    bool isSingle;
-    auto stones = updateStone(number, isSingle);
-
-    if (isSingle) {
-        // Single stone: run search synchronously
-        return search(precalc, target - 1, stones.first, depth);
-    } else if (depth < 2) {
-        // Two stones: run each branch asynchronously
-        auto future1 = std::async(std::launch::async, [&] {
-            return search(precalc, target - 1, stones.first, depth + 1);
-        });
-        auto future2 = std::async(std::launch::async, [&] {
-            return search(precalc, target - 1, stones.second, depth + 1);
-        });
-
-        // Wait for both results and combine them
-        uint64_t result1 = future1.get();
-        uint64_t result2 = future2.get();
-
-        return result1 + result2;
-    } else {
-        // Deeper levels: run synchronously
-        uint64_t result1 = search(precalc, target - 1, stones.first, depth + 1);
-        uint64_t result2 = search(precalc, target - 1, stones.second, depth + 1);
-
-        return result1 + result2;
-    }
-}
-
-void inspect(
+uint64_t inspect(
     std::unordered_map<MemoKey, uint64_t>& precalc,
     const uint64_t number,
     const uint64_t generations) {
     MemoKey key(number, generations);
 
+    // Base case: If no generations are left
     if (generations == 0) {
-        precalc[key] = 1;
-        return;
+        return 1; // A single valid sequence
     }
 
     // Check if already precalculated
-    if (precalc.find(key) != precalc.end()) {
-        return;
+    auto it = precalc.find(key);
+    if (it != precalc.end()) {
+        return it->second; // Return cached result
     }
-
-    bool isSingle;
-    auto stones = updateStone(number, isSingle);
 
     uint64_t result = 0;
-    if (isSingle) {
-        inspect(precalc, stones.first, generations - 1);
-        result += precalc[MemoKey(stones.first, generations - 1)];
+
+    if (number == 0 || number == 1) {
+        // Direct recursion for trivial cases
+        result = inspect(precalc, number, generations - 1);
     } else {
-        inspect(precalc, stones.first, generations - 1);
-        inspect(precalc, stones.second, generations - 1);
-        result += precalc[MemoKey(stones.first, generations - 1)];
-        result += precalc[MemoKey(stones.second, generations - 1)];
+        // Calculate the number of digits
+        uint16_t numDigits = log10(number) + 1;
+
+        if (numDigits % 2 == 0) {
+            // Split number into left and right parts
+            uint64_t denom = 1;
+            for (uint16_t i = 0; i < numDigits / 2; ++i) denom *= 10;
+
+            uint64_t left = number / denom;
+            uint64_t right = number % denom;
+
+            // Accumulate results directly from recursive calls
+            result += inspect(precalc, left, generations - 1);
+            result += inspect(precalc, right, generations - 1);
+        } else {
+            // Handle odd-digit case
+            uint64_t newNumber = 2024 * number;
+            result = inspect(precalc, newNumber, generations - 1);
+        }
     }
 
+    // Cache the computed result
     precalc[key] = result;
+    return result;
 }
 
 int main(int argc, char** argv) {
@@ -171,20 +144,9 @@ int main(int argc, char** argv) {
 
     std::vector<std::future<uint64_t>> futures;
     // Precalculate results for single-digit numbers
-    for (uint64_t i = 0; i < 400000; ++i) {
-        inspect(precalc, i, CALCULATED_GENS);
-    }
-
-    for (uint64_t number : numbers) {
-        futures.emplace_back(std::async(std::launch::async, [&precalc, target, number]() {
-            return search(precalc, target, number);
-        }));
-    }
-
-    // Gather results
     uint64_t sum = 0;
-    for (auto& future : futures) {
-        sum += future.get();
+    for (uint64_t number : numbers) {
+        sum += inspect(precalc, number, 75);
     }
 
     std::cout << sum << std::endl;
